@@ -1,44 +1,83 @@
-# SpiderPi-OOP-Project
+# 🕷️ SpiderPi OOP Project
+
+Deze repository bevat de documentatie en code voor het SpiderPi robotproject.
+
+---
 
 ## 1. Initiële Verbinding (AP-modus)
-De SpiderPi start standaard op in Access Point (AP) Modus.
 
-    Verbind met het netwerk: Verbind je laptop met de Wi-Fi SSID die begint met HW-.
+De SpiderPi start standaard op in **Access Point (AP) Modus**. Dit stelt je in staat om direct verbinding te maken met de robot zonder extern netwerk.
 
-    Wachtwoord: hiwonder
+### Verbindingsgegevens
 
-    Toegang tot de Desktop: Open VNC Viewer en verbind met de standaard gateway: 192.168.149.1.
+| Onderdeel        | Waarde           |
+| :--------------- | :--------------- |
+| **SSID**         | Begint met `HW-` |
+| **Wachtwoord**   | `hiwonder`       |
+| **VNC IP-adres** | `192.168.149.1`  |
+| **SSH/VNC User** | `pi`             |
+| **SSH/VNC Pass** | `raspberrypi`    |
 
-        Gebruikersnaam: pi
+> **Note:** Gebruik een VNC Viewer (zoals RealVNC) om toegang te krijgen tot de grafische interface via het bovenstaande IP-adres.
 
-        Wachtwoord: raspberrypi
+---
 
- 2. Brug slaan naar Persoonlijke Hotspot (STA-modus)
+## 2. Brug naar Persoonlijke Hotspot (STA-modus)
 
-Om de robot internettoegang te geven en te laten communiceren met een laptop op een breder netwerk, moet deze worden omgeschakeld naar Station (STA) Modus.
+Om de robot internettoegang te geven of via een lokaal netwerk te bereiken, schakelen we over naar de **Station (STA) Modus**.
 
-    Open Terminal (in de robot): Open de terminal binnen de VNC-omgeving en typ nmtui.
+1. **Terminal:** Open de terminal binnen de VNC-omgeving.
+2. **NMTUI:** Typ `nmtui` in de console voor de netwerkmanager.
+3. **Activeer:** Kies _'Activate a connection'_ en zoek je eigen hotspot/Wi-Fi.
+4. **Configuratie:** Mocht de verbinding verbreken, herstart de spiderpi en gebruik dan nmtui nog een keer maar selecteer dan _'Edit a connection'_ en zet je wachtwoord van je hotspot erin probeer dan stap 3 nog een keer.
 
-    Activeer Verbinding: Kies "Activate a connection" en zoek je eigen telefoon-hotspot.
+---
 
-    Configuratie: Als de verbinding verbreekt, herstart de robot. Gebruik de GUI (Wi-Fi icoon) om via "Connect to Hidden Network" de verbinding te forceren en het wachtwoord op te slaan.
+## 3. Automatisering: Bash Verbindingsscript
 
-    Verificatie: Zodra zowel de robot als je laptop op dezelfde hotspot zitten, krijgt de robot een nieuw IP-adres toegewezen.
+In plaats van handmatige configuratie kun je onderstaand script gebruiken om snel te schakelen.
 
- 3. De Robot lokaliseren op het netwerk
+### Stap 1: Maak het script aan
 
-Omdat het IP-adres verandert in STA-modus, gebruiken we nmap op een linux-systeem om de IP te vinden.
+nano connect_hotspot.sh
 
-    Zoek het IP van je laptop:
-    Bash
+### Stap 2 Plak deze code erin
 
-    hostname -I
+```bash
+#!/bin/bash
 
-    Scan de netwerk-range:
-    Als je eigen IP bijvoorbeeld 10.x.x.217 is, scan dan het subnet (vervang x door je eigen getallen):
-    Bash
+# --- CONFIGURATIE ---
+SSID="JOUW_SSID"
+PASS="JOUW_WACHTWOORD"
 
-    sudo nmap -sn 10.x.x.0/24
+echo "------------------------------------------"
+echo "Stap 1: Wifi aanzetten..."
+nmcli radio wifi on
 
-    Identificeer de robot: Zoek naar het apparaat met de label Raspberry Pi (Trading) of Hiwonder.
+echo "Stap 2: Forceer een netwerk-scan (even geduld...)"
+nmcli device wifi rescan
+sleep 5
 
+echo "Stap 3: Beschikbare netwerken controleren..."
+nmcli device wifi list | grep "$SSID"
+
+echo "Stap 4: Verbinden met $SSID..."
+nmcli device wifi connect "$SSID" password "$PASS"
+
+echo "------------------------------------------"
+echo "Klaar! Jouw IP adres is:"
+hostname -I
+echo "------------------------------------------"
+```
+
+ctrl + o dan enter
+
+ctrl + x
+
+### Stap 3 Maak het script uitvoerbaar
+
+chmod +x connect_hotspot.sh
+
+## Stap 4 Run de script
+
+./connect_hotspot.sh
