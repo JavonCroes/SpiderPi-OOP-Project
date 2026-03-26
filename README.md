@@ -20,22 +20,12 @@ De SpiderPi start standaard op in **Access Point (AP) Modus**. Dit stelt je in s
 
 ---
 
-## 2. Brug naar Persoonlijke Hotspot (STA-modus)
-Om de robot internettoegang te geven of via een lokaal netwerk te bereiken, schakelen we over naar de **Station (STA) Modus**.
-
-1. **Terminal:** Open de terminal binnen de VNC-omgeving.
-2. **NMTUI:** Typ `nmtui` in de console voor de netwerkmanager.
-3. **Activeer:** Kies *'Activate a connection'* en zoek je eigen hotspot/Wi-Fi.
-4. **Configuratie:** Mocht de verbinding verbreken, herstart de spiderpi en gebruik dan nmtui nog een keer maar selecteer dan *'Edit a connection'* en zet je wachtwoord van je hotspot erin probeer dan stap 3 nog een keer.
-
----
-
-## 3. Automatisering: Bash Verbindingsscript
-In plaats van handmatige configuratie kun je onderstaand script gebruiken om snel te schakelen.
+## 2. Automatisering: Bash Verbindingsscript
+In plaats van handmatige configuratie kun je onderstaand bash script gebruiken om snel te connecten.
 
 ### Stap 1: Maak het script aan
 
-nano connect_hotspot.sh
+nano connect_school.sh
 
 ### Stap 2 Plak deze code erin
 ```bash
@@ -69,7 +59,11 @@ ctrl + o dan enter
 ctrl + x
 
 ### Stap 3 Maak het script uitvoerbaar
-chmod +x connect_hotspot.sh
+chmod +x connect_school.sh
 
 ## Stap 4 Run de script
-./connect_hotspot.sh
+./connect_school.sh
+
+Zodra de verbinding is omgezet naar iotroam kun je de robot op je laptop vinden via:
+
+    Hostname: ping raspberrypi.local
