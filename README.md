@@ -20,14 +20,14 @@ De SpiderPi start standaard op in **Access Point (AP) Modus**. Dit stelt je in s
 
 ---
 
-## 2. Automatisering: Bash Verbindingsscript
+## 2. Automatisering: Bash Verbindingsscript in de SpiderPi terminal
 In plaats van handmatige configuratie kun je onderstaand bash script gebruiken om snel te connecten.
 
 ### Stap 1: Maak het script aan
-
+```bash
 nano connect_school.sh
-
-### Stap 2 Plak deze code erin
+```
+### Stap 2 Plak deze code erin (Verander de SSID en PASS)
 ```bash
 #!/bin/bash
 
@@ -59,11 +59,15 @@ ctrl + o dan enter
 ctrl + x
 
 ### Stap 3 Maak het script uitvoerbaar
+```bash
 chmod +x connect_school.sh
-
+```
 ## Stap 4 Run de script
+```bash
 ./connect_school.sh
+```
 
 Zodra de verbinding is omgezet naar iotroam kun je de robot op je laptop vinden via:
-
+```bash
     ping raspberrypi.local
+```
