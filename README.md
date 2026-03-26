@@ -69,5 +69,5 @@ chmod +x connect_school.sh
 
 Zodra de verbinding is omgezet naar iotroam kun je de robot op je laptop vinden via:
 ```bash
-    ping raspberrypi.local
+ping raspberrypi.local
 ```
