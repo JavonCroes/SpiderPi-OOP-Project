@@ -1,14 +1,15 @@
 import time
+
 from gpiozero import Buzzer as GZ_Buzzer
+
 
 class Buzzer:
     def __init__(self, gpio_pin=None):
         self.gpio_pin = gpio_pin
         self.device = None
-        
+
         if self.gpio_pin is not None:
             try:
-                # Initialiseer het fysieke component op de Pi 5
                 self.device = GZ_Buzzer(self.gpio_pin)
             except Exception as e:
                 print(f"Buzzer hardware niet gevonden: {e}")
