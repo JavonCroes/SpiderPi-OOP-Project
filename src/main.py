@@ -11,7 +11,7 @@ def main():
     # HARDWARE TEST TOEGEVOEGD
     servo1 = BusServo(1)
     servo2 = PWMServo(2)
-    buzzer = Buzzer(gpio_pin=16)
+    buzzer = Buzzer()
 
     safety = SafetySystem([servo1, servo2], buzzer)
 
@@ -22,7 +22,7 @@ def main():
     servo1.update_temperature(50)
     servo2.update_temperature(80)
 
-    safety.check()  # 🔥 moet warning geven
+    safety.check() 
 
     robot_oog = VisionProcessor()
 
