@@ -1,4 +1,5 @@
 import cv2 as cv
+
 from hardware.bus_servo import BusServo
 from hardware.buzzer import Buzzer
 from hardware.pwm_servo import PWMServo
@@ -7,7 +8,7 @@ from vision.processor import VisionProcessor
 
 
 def main():
-    #HARDWARE TEST TOEGEVOEGD
+    # HARDWARE TEST TOEGEVOEGD
     servo1 = BusServo(1)
     servo2 = PWMServo(2)
     buzzer = Buzzer(gpio_pin=16)
@@ -17,7 +18,7 @@ def main():
     servo1.move(90)
     servo2.set_angle(45)
 
-    #temperatuur simulatie 
+    # temperatuur simulatie
     servo1.update_temperature(50)
     servo2.update_temperature(80)
 

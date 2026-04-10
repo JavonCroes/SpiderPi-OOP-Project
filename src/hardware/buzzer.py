@@ -4,7 +4,7 @@ from gpiozero import Buzzer as GZ_Buzzer
 
 
 class Buzzer:
-    def __init__(self, gpio_pin=None):
+    def __init__(self, gpio_pin=16):
         self.gpio_pin = gpio_pin
         self.device = None
 
