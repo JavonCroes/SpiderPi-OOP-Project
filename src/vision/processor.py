@@ -21,7 +21,6 @@ class VisionProcessor:
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         faces = self.face_cascade.detectMultiScale(gray, 1.05, 6, minSize=(30, 30))
 
-        # Midden van het scherm
         scherm_midden = frame.shape[1] // 2
 
         if len(faces) > 0:
