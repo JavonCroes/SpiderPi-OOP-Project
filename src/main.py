@@ -4,7 +4,7 @@ from hardware.bus_servo import BusServo
 from hardware.buzzer import Buzzer
 from hardware.pwm_servo import PWMServo
 from hardware.safety import SafetySystem
-from vision.processor import VisionProcessor
+from vision.processor import FaceProcessor
 
 
 def main():
@@ -24,25 +24,29 @@ def main():
 
     safety.check() 
 
-    robot_oog = VisionProcessor()
+    # Vision
+    cap = cv.VideoCapture(0)
+    
+    tracker = FaceProcessor()
 
-    print("Robot kijkt nu... Druk op 'q' om te stoppen.")
+    print("AI Start! Druk op 'q' om te stoppen.")
 
-    while True:
-        beeld = robot_oog.find_face()
-
-        if beeld is not None:
-            afwijking = robot_oog.target_x
-
-            if afwijking != 0:
-                print(f"Gezicht gevonden! Afwijking: {afwijking} pixels")
-
-            cv.imshow("SpiderPi", beeld)
-
-        if cv.waitKey(1) & 0xFF == ord("q"):
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret: 
             break
 
-    robot_oog.stop()
+        frame, error_x = tracker.get_error(frame)
+
+        if error_x != 0:
+            print(f"Robot moet sturen: {error_x}")
+
+        cv.imshow('SpiderPi Tracking', frame)
+
+        if cv.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
     cv.destroyAllWindows()
 
 
