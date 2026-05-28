@@ -1,92 +1,220 @@
+import argparse
+import collections
+import os
+import queue
+import sys
+import threading
+import time
+
 import cv2 as cv
 
-from hardware.bus_servo import BusServo
-from hardware.buzzer import Buzzer
-from hardware.pwm_servo import PWMServo
-from hardware.safety import SafetySystem
-#from vision.processor import FaceProcessor
-from vision.apriltag_processor import AprilTagProcessor
-from utils.pid_controller import PID
+from vision.camera import Camera
+from vision.pid import PID
+from vision.processor import AprilTagProcessor, ColorProcessor, FaceProcessor, VisionProcessor
+from vision.servo import GimbalControl
+from vision.stream import MJPEGServer
+
+DEADZONE = 15
+VALID_MODES = {"0": "Idle", "1": "AprilTag", "2": "Face", "3": "Color"}
 
 
-def main():
-    # HARDWARE TEST TOEGEVOEGD
-    servo1 = BusServo(1)
-    servo2 = PWMServo(2)
-    buzzer = Buzzer()
+class RobotTracker:
+    def __init__(self, mode: str = "Idle", stream_port: int = 8080):
+        self._camera = Camera().start()
+        self._gimbal = GimbalControl()
+        self._stream = MJPEGServer(port=stream_port, quality=50, fps_limit=20)
 
-    safety = SafetySystem([servo1, servo2], buzzer)
+        self._processors: dict[str, VisionProcessor] = {
+            "AprilTag": AprilTagProcessor(),
+            "Face": FaceProcessor(draw_landmarks=False),
+            "Color": ColorProcessor(),
+        }
+        self._mode = mode
+        self._running = True
+        self._restart_requested = False
 
-    servo1.move(90)
-    servo2.set_angle(45)
+        self._pid_pan = PID(
+            Kp=0.20, Ki=0.01, Kd=0.04, setpoint=0, output_limits=(-40, 40)
+        )
+        self._pid_tilt = PID(
+            Kp=0.20, Ki=0.01, Kd=0.04, setpoint=0, output_limits=(-40, 40)
+        )
+        self._switch_mode(self._mode)
 
-    # temperatuur simulatie
-    servo1.update_temperature(20)
-    servo2.update_temperature(20)
+        self._infer_frame: cv.typing.MatLike | None = None
+        self._infer_lock = threading.Lock()
+        self._infer_ready = threading.Event()
+        self._annotated: cv.typing.MatLike | None = None
+        self._annotated_lock = threading.Lock()
 
-    safety.check() 
+    @property
+    def _processor(self) -> VisionProcessor:
+        return self._processors[self._mode]
 
-    # Vision
-    # cap = cv.VideoCapture(0)
-    
-    # tracker = FaceProcessor()
+    def _switch_mode(self, mode: str) -> None:
+        self._mode = mode
 
-    # print("AI Start! Druk op 'q' om te stoppen.")
+        for pid in [self._pid_pan, self._pid_tilt]:
+            pid.clear()
 
-    # while cap.isOpened():
-    #     ret, frame = cap.read()
-    #     if not ret: 
-    #         break
+        if mode == "Idle":
+            self._gimbal.center()
+            print("Switched to Idle mode")
+            return
 
-    #     frame, error_x = tracker.get_error(frame)
+        kp, ki, kd = 0.20, 0.01, 0.04
+        limits = (-40, 40)
 
-    #     if error_x != 0:
-    #         print(f"Robot moet sturen: {error_x}")
+        for pid in [self._pid_pan, self._pid_tilt]:
+            pid.Kp = kp
+            pid.Ki = ki
+            pid.Kd = kd
+            pid.output_limits = limits
 
-    #     cv.imshow('SpiderPi Tracking', frame)
+        print(f"Switched to {mode} mode (Kp={kp}, Limit={limits[1]})")
 
-    #     if cv.waitKey(1) & 0xFF == ord('q'):
-    #         break
+    def _handle_tracking(
+        self, error_x: float, error_y: float, found: bool, dt: float
+    ) -> None:
+        if not found:
+            self._pid_pan.clear()
+            self._pid_tilt.clear()
+            return
 
-    # cap.release()
-    # cv.destroyAllWindows()
+        pan_move = self._pid_pan.update(error_x, dt) if abs(error_x) > DEADZONE else 0
+        tilt_move = self._pid_tilt.update(error_y, dt) if abs(error_y) > DEADZONE else 0
 
-    # 1. Hardware setup (Servo 1 = Pan, Servo 2 = Tilt)
-    servo1 = BusServo(1)
-    servo2 = PWMServo(2)
-    # Startposities (Middenwaarde van de servo's)
-    cur_p, cur_t = 500, 1500
-    servo1.move(cur_p)
-    servo2.set_angle(cur_t)
-    # 2. Vision & PID setup
-    cap = cv.VideoCapture(0)
-    tracker = AprilTagProcessor()
-    pid_x = PID(kp=0.08, ki=0.0, kd=0.01)
-    pid_y = PID(kp=0.08, ki=0.0, kd=0.01)
-    print("AprilTag Tracking Active... Press 'q' to stop.")
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret: 
-            break
-        # 3. Detectie & Error berekening
-        frame, ex, ey = tracker.get_error(frame)
-        if ex != 0 or ey != 0:
-            # 4. PID berekening en positie update
-            cur_p -= pid_x.update(ex)
-            cur_t += pid_y.update(ey)
-            # Clamping (Voorkom dat de servo te ver draait)
-            cur_p = max(0, min(1000, cur_p))
-            cur_t = max(500, min(2500, cur_t))
-            # 5. Hardware aansturen
-            # In plaats van 500ms, gebruik 20ms of 0
-            servo1.move(int(cur_p), 20)
-            servo2.set_angle(int(cur_t))
-        cv.imshow('SpiderPi Tracking', frame)
-        if cv.waitKey(1) & 0xFF == ord('q'): 
-            break
-    cap.release()
-    cv.destroyAllWindows()
+        if abs(error_x) <= DEADZONE:
+            self._pid_pan.clear()
+        if abs(error_y) <= DEADZONE:
+            self._pid_tilt.clear()
+
+        if pan_move != 0 or tilt_move != 0:
+            self._gimbal.move(pan_move, tilt_move)
+
+    def _read_input(self) -> None:
+        print(
+            "Commands: '0' = Idle | '1' = AprilTag | '2' = Face | '3' = Color | 'r' = Reset | 'q' = Quit"
+        )
+        for line in sys.stdin:
+            cmd = line.strip()
+            if cmd == "q":
+                self._running = False
+                break
+            if cmd == "r":
+                self._restart_requested = True
+                self._running = False
+                break
+            mode = VALID_MODES.get(cmd)
+            if mode:
+                self._switch_mode(mode)
+
+    def _process_web_commands(self) -> None:
+        while self._running:
+            try:
+                cmd = self._stream.commands.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            if cmd == "quit":
+                self._running = False
+                break
+            if cmd == "reset":
+                self._restart_requested = True
+                self._running = False
+                break
+            if cmd in ("Idle", "AprilTag", "Face", "Color"):
+                self._switch_mode(cmd)
+
+    def _inference_loop(self) -> None:
+        last_time = time.monotonic()
+        fps_history: collections.deque[float] = collections.deque(maxlen=30)
+
+        while self._running:
+            if not self._infer_ready.wait(timeout=0.5):
+                continue
+            self._infer_ready.clear()
+
+            with self._infer_lock:
+                frame = self._infer_frame
+            if frame is None:
+                continue
+
+            now = time.monotonic()
+            dt = max(now - last_time, 1e-4)
+            last_time = now
+            fps_history.append(dt)
+
+            if self._mode == "Idle":
+                annotated = frame
+                error_x = error_y = 0.0
+                found = False
+            else:
+                annotated, error_x, error_y, found = self._processor.get_error(frame)
+                self._handle_tracking(error_x, error_y, found, dt)
+
+            fps = 1.0 / (sum(fps_history) / len(fps_history))
+            cv.putText(
+                annotated,
+                f"{self._mode} | {fps:.1f} fps",
+                (10, 30),
+                cv.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 255, 255),
+                2,
+            )
+            if found:
+                cv.putText(
+                    annotated,
+                    f"err x:{int(error_x):+d} y:{int(error_y):+d}",
+                    (10, 60),
+                    cv.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (180, 180, 180),
+                    2,
+                )
+
+            with self._annotated_lock:
+                self._annotated = annotated
+
+    def run(self) -> None:
+        self._stream.start()
+        threading.Thread(target=self._read_input, daemon=True).start()
+        threading.Thread(target=self._process_web_commands, daemon=True).start()
+        threading.Thread(target=self._inference_loop, daemon=True).start()
+
+        try:
+            while self._running:
+                if not self._camera.wait_new(timeout=0.5):
+                    continue
+
+                ret, frame = self._camera.read()
+                if not ret or frame is None:
+                    continue
+
+                with self._infer_lock:
+                    self._infer_frame = frame
+                self._infer_ready.set()
+
+                with self._annotated_lock:
+                    to_send = self._annotated
+                self._stream.update_frame(to_send if to_send is not None else frame)
+
+        finally:
+            self._camera.stop()
+            self._stream.stop()
+            self._gimbal.center()
+            if self._restart_requested:
+                print("Restarting...")
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="SpiderPi face/AprilTag tracker")
+    p.add_argument("--mode", choices=["Idle", "AprilTag", "Face", "Color"], default="Idle")
+    p.add_argument("--port", type=int, default=8082, help="MJPEG stream port")
+    return p.parse_args()
 
 
 if __name__ == "__main__":
-    main()
+    args = _parse_args()
+    RobotTracker(mode=args.mode, stream_port=args.port).run()

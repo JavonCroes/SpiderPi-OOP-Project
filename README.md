@@ -1,73 +1,89 @@
-# 🕷️ SpiderPi OOP Project
+# SpiderPi OOP Project
 
-Deze repository bevat de documentatie en code voor het SpiderPi robotproject.
+Hexapod robot met camera tracking (AprilTag, gezicht en kleur) via een OOP-architectuur in Python.
 
----
+## Vereisten
 
-## 1. Initiële Verbinding (AP-modus)
-De SpiderPi start standaard op in **Access Point (AP) Modus**. Dit stelt je in staat om direct verbinding te maken met de robot zonder extern netwerk.
+- Raspberry Pi 5 met Hiwonder SpiderPi
+- Python 3.11+
+- USB/CSI camera op gimbal
 
-### Verbindingsgegevens
-| Onderdeel | Waarde |
-| :--- | :--- |
-| **SSID** | Begint met `HW-` |
-| **Wachtwoord** | `hiwonder` |
-| **VNC IP-adres** | `192.168.149.1` |
-| **SSH/VNC User** | `pi` |
-| **SSH/VNC Pass** | `raspberrypi` |
+## Installatie
 
-> **Note:** Gebruik een VNC Viewer (zoals RealVNC) om toegang te krijgen tot de grafische interface via het bovenstaande IP-adres.
-
----
-
-## 2. Automatisering: Bash Verbindingsscript in de SpiderPi terminal
-In plaats van handmatige configuratie kun je onderstaand bash script gebruiken om snel te connecten.
-
-### Stap 1: Maak het script aan
 ```bash
-nano connect_school.sh
-```
-### Stap 2 Plak deze code erin (Verander de SSID en PASS)
-```bash
-#!/bin/bash
-
-# --- CONFIGURATIE ---
-SSID="JOUW_SSID"
-PASS="JOUW_WACHTWOORD"
-
-echo "------------------------------------------"
-echo "Stap 1: Wifi aanzetten..."
-nmcli radio wifi on
-
-echo "Stap 2: Forceer een netwerk-scan (even geduld...)"
-nmcli device wifi rescan
-sleep 5 
-
-echo "Stap 3: Beschikbare netwerken controleren..."
-nmcli device wifi list | grep "$SSID"
-
-echo "Stap 4: Verbinden met $SSID..."
-nmcli device wifi connect "$SSID" password "$PASS"
-
-echo "------------------------------------------"
-echo "Klaar! Jouw IP adres is:"
-hostname -I
-echo "------------------------------------------"
-```
-ctrl + o dan enter 
-
-ctrl + x
-
-### Stap 3 Maak het script uitvoerbaar
-```bash
-chmod +x connect_school.sh
-```
-### Stap 4 Run de script
-```bash
-./connect_school.sh
+pip install opencv-python mediapipe dt-apriltags 'PyTurboJPEG<2'
 ```
 
-### Stap 5 Zodra de verbinding is omgezet naar iotroam kun je de robot op je laptop vinden via:
+Download het MediaPipe face model (alleen nodig voor gezichtsherkenning):
 ```bash
+cd src
+wget -q https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task \
+     -O face_landmarker_v2_with_blendshapes.task
+```
+
+## Opstarten
+
+```bash
+python3 src/main.py
+```
+
+Open de webinterface in je browser:
+```
+http://<pi-ip>:8082
+```
+
+Het programma start in idle modus. Kies een tracking modus via de knoppen op de webpagina of via het toetsenbord in de SSH terminal:
+
+| Toets | Modus |
+|-------|-------|
+| `0` | Idle |
+| `1` | AprilTag |
+| `2` | Gezicht |
+| `3` | Kleur |
+| `r` | Reset |
+| `q` | Stop |
+
+### Extra opties
+
+```bash
+python3 src/main.py --mode AprilTag   # Start direct in een tracking modus
+python3 src/main.py --port 8080       # Andere poort
+```
+
+## Projectstructuur
+
+```
+src/
+├── main.py              # RobotTracker klasse — startpunt
+└── vision/
+    ├── camera.py        # Camera capture in eigen thread
+    ├── pid.py           # PID controller
+    ├── processor.py     # AprilTagProcessor, FaceProcessor, ColorProcessor
+    ├── servo.py         # Gimbal aansturing (pan/tilt)
+    └── stream.py        # Webinterface + MJPEG stream
+```
+
+## Verbinding met de robot
+
+### AP-modus (standaard)
+
+| Gegeven | Waarde |
+|---------|--------|
+| Wi-Fi naam | Begint met `HW-` |
+| Wachtwoord | `hiwonder` |
+| IP-adres | `192.168.149.1` |
+| SSH gebruiker | `pi` |
+| SSH wachtwoord | `raspberrypi` |
+
+```bash
+ssh pi@192.168.149.1
+```
+
+### Schoolnetwerk
+
+```bash
+bash /home/pi/connect_school.sh
+# Wacht 30 seconden, zoek daarna het nieuwe IP:
 ping raspberrypi.local
+ssh pi@<nieuw-ip>
 ```
